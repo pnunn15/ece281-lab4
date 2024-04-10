@@ -75,7 +75,7 @@ entity top_basys3 is
     port(
         -- inputs
         clk     :   in std_logic; -- native 100MHz FPGA clock
-        sw      :   in std_logic_vector(15 downto 0);
+        sw      :   in std_logic_vector(1 downto 0);
         btnU    :   in std_logic; -- master_reset
         btnL    :   in std_logic; -- clk_reset
         btnR    :   in std_logic; -- fsm_reset
@@ -91,19 +91,68 @@ end top_basys3;
 
 architecture top_basys3_arch of top_basys3 is 
   
-	-- declare components and signals
-
-  
+	-- declare components
+    component clock_divider is
+        generic (constant k_DIV : natural := 2);
+        port (
+            i_clk, i_reset : in STD_LOGIC;
+            o_clk : out STD_LOGIC
+        );
+    end component clock_divider;
+    
+    component elevator_controller_fsm is
+        port ( i_clk     : in  STD_LOGIC;
+               i_reset   : in  STD_LOGIC;
+               i_stop    : in  STD_LOGIC;
+               i_up_down : in  STD_LOGIC;
+               o_floor   : out STD_LOGIC_VECTOR (3 downto 0)           
+             );
+    end component elevator_controller_fsm;
+    
+    component sevenSegDecoder is
+        Port ( i_D : in STD_LOGIC_VECTOR (3 downto 0);
+               o_S : out STD_LOGIC_VECTOR (6 downto 0));
+    end component sevenSegDecoder;
+    
+    -- declare signals
+    signal w_reset1 : STD_LOGIC := '0';
+    signal w_reset2 : STD_LOGIC := '0';
+    signal w_clk : STD_LOGIC := '0';
+    signal w_floor : STD_LOGIC_VECTOR (3 downto 0) := "0010";
+    
 begin
 	-- PORT MAPS ----------------------------------------
-
+    clkdiv_inst : clock_divider
+        generic map ( k_DIV => 125000000) -- 2 Hz clock from 100 MHz
+        port map (                          
+           i_clk   => clk,
+           i_reset => w_reset1,
+           o_clk   => w_clk
+        );    
 	
-	
+	elv_cnt_inst : elevator_controller_fsm
+	    port map(
+	       i_reset => w_reset2,
+	       i_stop => sw(0),
+	       i_up_down => sw(1),
+	       i_clk => w_clk,
+	       o_floor => w_floor
+	    );
+	   
+	sevenSegDecoder1_inst: sevenSegDecoder
+        port map(
+           i_D => w_floor,
+           o_S => seg
+        );
+        
+    
 	-- CONCURRENT STATEMENTS ----------------------------
-	
+	an <= "1011";
+	w_reset1 <= btnU or btnL;
+	w_reset2 <= btnU or btnR;
 	-- LED 15 gets the FSM slow clock signal. The rest are grounded.
-	
-
+	led(15) <= w_clk;
+    led(14 downto 0) <= (others => '0');
 	-- leave unused switches UNCONNECTED. Ignore any warnings this causes.
 	
 	-- wire up active-low 7SD anodes (an) as required
